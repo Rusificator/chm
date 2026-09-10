@@ -1,1 +1,113 @@
+#include <iostream>
+#include <fstream>
+#include <cmath>
+using namespace std;
 
+int main()
+{
+    setlocale(LC_ALL, "Rus");
+    
+    ifstream fin;
+    ofstream fout;
+  
+    int n;
+    fin.open("input.txt");
+    if (!fin)
+    { 
+        cout<<"Не удалось открыть input.txt\n"; 
+        return 1; 
+    }
+    fout.open("output.txt");
+    if (!fout) 
+    { 
+        cout<<"Не удалось открыть output.txt\n";
+        return 1;
+    }
+
+    fin >> n;
+    double** a = new double* [n];
+    for (int i = 0; i < n; i++) 
+        a[i] = new double[n + 1];
+
+        
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j <= n; j++)
+            fin >> a[i][j];
+   
+
+
+    
+
+    //проверка: на диагонали не должно быть нулей
+    bool f = false;
+    for (int i = 0; i < n; i++)
+        if (fabs(a[i][i]) < 1e-12) 
+            f = true;
+    if (f)
+    {
+        fout<<"На диагонали есть нули -> метод простых итераций не применим.\n";
+        cout<<"На диагонали есть нули -> метод простых итераций не применим.\n";
+    }
+    else
+    {
+        double eps = 1e-6;      //точность
+        int maxIter = 10000;    //страховка от зацикливания
+
+        double* x = new double[n];  //текущее приближение
+        double* xn = new double[n];  //следующее приближение
+
+        //начальное приближение  нули
+        for (int i = 0; i < n; i++)
+            x[i] = 0.0;
+
+        int iter = 0;
+        for (; iter < maxIter; iter++)
+        {
+            
+            for (int i = 0; i < n; i++)
+            {
+                double sum = 0.0;
+                for (int j = 0; j < n; j++)
+                    if (j != i)
+                        sum += a[i][j] * x[j];
+                xn[i] = (a[i][n] - sum) / a[i][i];
+            }
+
+            //критерий остановки: максимальное изменение
+            double maxDiff = 0.0;
+            for (int i = 0; i < n; i++)
+            {
+                double d = fabs(xn[i] - x[i]);
+                if (d > maxDiff) maxDiff = d;
+            }
+
+            //переносим новое приближение в старое
+            for (int i = 0; i < n; i++) x[i] = xn[i];
+
+            if (maxDiff < eps) break;
+        }
+
+        if (iter >= maxIter)
+        {
+            fout<<"Метод не сошёлся за"<<maxIter<<"итераций.\n";
+            cout<<"Метод не сошёлся за"<<maxIter<<"итераций.\n";
+        }
+        else
+        {
+            fout<<"Решение системы (итераций: "<<iter+1<<"):\n";
+            for (int i = 0; i < n; i++)
+                fout << "x" << i + 1 << " = " << x[i] << "\n";
+        }
+        delete[] x;
+        delete[] xn;
+    }
+
+    //очищаем память/закрываем файлы
+    for (int i = 0; i < n; i++) 
+        delete[] a[i];
+    delete[] a;
+
+     fin.close();
+     fout.close(); 
+     return 0;
+}
