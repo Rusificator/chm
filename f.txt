@@ -8,34 +8,33 @@ int main()
 {
     setlocale(LC_ALL, "Rus");
     int n;
+    cout << "Введите размерность матрицы: ";
     cin >> n;
-    double ** a;
-    a = new double*[n];
-    cout << "";
-    for (int i = 0; i < n; ++i)
-        for (int j=0; j <= n; ++j)
-            cin >> a[i][j];
+    double** a = new double* [n];
+    for (int i = 0; i < n; i++)
+       a[i] = new double[n+1];
 
-    for (int i = 0; i < n; ++i)
-    {
-        if (a[i][i] <= b) {
-            for (int j = i + 1; j < n; ++j)
-            {
-                if (a[i][j] != 0)
-                {
-                    swap(a[i], a[j]);
-                    break;
-                }
-            }
-        }
-        if (a[i][i] == 0)
-        {
-            cout << "";
-        }
-        for (int j = 0; j <= n; ++j)
+    cout << "Введите матрицу коэффициентов A :" << endl;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
             cin >> a[i][j];
+        }
     }
 
-   
-}
+    cout << "Введите вектор правых частей b :" << endl;
+    for (int i = 0,j=n; i<n; i++) {
+        cin >> a[i][j];
+    }
 
+
+
+    for (int i = 0;i < n;i++)
+    { 
+        cout << "\n";
+        for (int j = 0;j < n + 1;j++)
+            cout << a[i][j] << " ";
+    }
+   
+
+
+}
