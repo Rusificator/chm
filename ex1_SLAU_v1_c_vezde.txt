@@ -1,1 +1,152 @@
+#include <iostream>
+#include <fstream>
+#include <cmath>
+using namespace std;
 
+int main()
+{
+    setlocale(LC_ALL, "Rus");
+    
+    ifstream fin;
+    ofstream fout;
+  
+    int n;
+    fin.open("input.txt");
+    if (!fin)
+    { 
+        cout<<"Не удалось открыть input.txt\n"; 
+        return 1; 
+    }
+    fout.open("output.txt");
+    if (!fout) 
+    { 
+        cout<<"Не удалось открыть output.txt\n";
+        return 1;
+    }
+
+    fin >> n;
+    double** a = new double* [n];
+    for (int i = 0; i < n; i++) 
+        a[i] = new double[n + 1];
+
+        
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j <= n; j++)
+            fin >> a[i][j];
+   
+
+
+    //массив соответствия столбцов: col[k] — исходный номер переменной которая сейчас стоит в столбце k
+    int* col = new int[n];
+    for (int k = 0; k < n; k++) col[k] = k;
+
+    //прямой ход
+    bool f = false;
+    for (int k = 0; k < n; k++) {
+        //поиск главного элемента по всей подматрице 
+        int p = k, q = k;
+        double maxAbs = 0.0;
+        for (int i = k; i < n; i++) {
+            for (int j = k; j < n; j++) {
+                if (fabs(a[i][j]) > maxAbs) {
+                    maxAbs = fabs(a[i][j]);
+                    p = i;
+                    q = j;
+                }
+            }
+        }
+
+        if (maxAbs < 1e-12) 
+        { 
+            f = true; 
+            break; 
+        }
+        //перестановка строк k и p
+        if (p != k) {
+            double* tmp = a[k];
+            a[k] = a[p];
+            a[p] = tmp;
+        }
+
+        //перестановка столбцов k и q 
+        if (q != k) {
+            for (int i = 0; i < n; i++) {
+                double t = a[i][k];
+                a[i][k] = a[i][q];
+                a[i][q] = t;
+            }
+            // запоминаем, что переменные k и q поменялись местами
+            int t = col[k];
+            col[k] = col[q];
+            col[q] = t;
+        }
+
+        //исключение x_k из строк ниже
+        for (int i = k + 1; i < n; i++) 
+        {
+            double m = a[i][k] / a[k][k];
+            for (int j = k; j <= n; j++)
+                a[i][j] -= m * a[k][j];
+        }
+    }
+
+    //
+    if (f) 
+    {
+        fout<<"Система не имеет единственного решения.\n";
+        cout<<"Система не имеет единственного решения.\n";
+    }
+    else 
+    {
+        //обратный ход
+        double* x = new double[n];
+        for (int i = n - 1; i >= 0; i--) 
+        {
+            double sum = 0.0;
+            for (int j = i + 1; j < n; j++)
+                sum += a[i][j] * x[j];
+            x[i] = (a[i][n] - sum) / a[i][i];
+        }
+
+        double* res = new double[n];
+        for (int k = 0; k < n; k++)
+            res[col[k]] = x[k];
+        
+    fout<<"Решение системы:\n";
+    for (int i = 0; i < n; i++)
+        fout<<"x"<<i+1<<"="<<x[i]<<"\n";
+        
+      
+
+        delete[] x;
+        delete[] res;
+    }
+
+    //очищаем память/закрываем файлы
+    for (int i = 0; i < n; i++) 
+        delete[] a[i];
+    delete[] a;
+
+     fin.close();
+     fout.close(); 
+     return 0;
+}
+/*
+   else {
+       cout << "Введите размерность матрицы: ";
+       int n;
+       cin >> n;
+       double** a = new double* [n];
+       for (int i = 0; i < n; i++)
+           a[i] = new double[n + 1];
+
+       cout << "Введите матрицу коэффициентов A:\n";
+       for (int i = 0; i < n; i++)
+           for (int j = 0; j < n; j++)
+               cin >> a[i][j];
+
+       cout << "Введите вектор правых частей b:\n";
+       for (int i = 0; i < n; i++)
+           cin >> a[i][n];
+   }
+   */
