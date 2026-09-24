@@ -1,0 +1,115 @@
+#include <iostream>
+#include <fstream>
+#include <cmath>
+#include <sstream>
+using namespace std;
+
+int main()
+{
+    setlocale(LC_ALL, "Rus");
+
+    ifstream fin;
+    ofstream fout;
+
+    
+    fin.open("input.txt");
+    if (!fin) 
+    { 
+        cout << "Не удалось открыть input.txt\n"; 
+        return 1; 
+    }
+    fout.open("output.txt");
+    if (!fout) 
+    { 
+        cout << "Не удалось открыть output.txt\n";
+        return 1; 
+    }
+
+    //определяем n по первой строке
+    string line;
+    getline(fin, line);
+    istringstream iss(line);
+    double tmp;
+    int m = 0;
+    while (iss >> tmp)
+        m++;
+    int n = m - 1;
+
+    if (n <= 0) {
+        cout << "Не удалось определить размерность матрицы.\n";
+        return 1;
+    }
+
+    //читаем матрицу с начала файла
+    fin.clear();
+    fin.seekg(0);
+
+
+    double** a = new double* [n];
+    for (int i = 0; i < n; i++)
+        a[i] = new double[n + 1];
+
+    //читаем расширенную матрицу: n строк по (n+1) чисел
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j <= n; j++)
+            fin >> a[i][j];
+
+    //выбор итерационного параметра
+    double normA = 0.0;
+    for (int i = 0; i < n; i++) {
+        double rowSum = 0.0;
+        for (int j = 0; j < n; j++)
+            rowSum += fabs(a[i][j]);
+        if (rowSum > normA) normA = rowSum;
+    }
+    double tau = 1.0 / normA;
+
+    double eps = 1e-6;      //точность
+    int maxIter = 10000;    //кол-во итераций
+
+    double* x = new double[n];  //текущее приближение
+    for (int i = 0; i < n; i++) x[i] = 0.0; //начальное приближение 0
+
+    int iter = 0;
+    for (; iter < maxIter; iter++)
+    {
+        double maxDiff = 0.0;
+
+        
+        //формула: xi^(k+1) = xi^k + tau * (bi - суммаj(aij * xj^k))
+        for (int i = 0; i < n; i++)
+        {
+            double sum = 0.0;
+            for (int j = 0; j < n; j++)
+                sum += a[i][j] * x[j];   //все j, включая i
+
+            double newX = x[i] + tau * (a[i][n] - sum);
+            double d = fabs(newX - x[i]);
+            if (d > maxDiff) maxDiff = d;
+            x[i] = newX;
+        }
+
+        if (maxDiff < eps)
+            break;
+    }
+
+    if (iter >= maxIter)
+    {
+        fout << "Метод не сошёлся за " << maxIter << " итераций.\n";
+    }
+    else
+    {
+        fout << "Решение системы (итераций: " << iter + 1 << ", tau = " << tau << "):\n";
+        for (int i = 0; i < n; i++)
+            fout << "x" << i + 1 << " = " << x[i] << "\n";
+    }
+
+    delete[] x;
+    for (int i = 0; i < n; i++)
+        delete[] a[i];
+    delete[] a;
+
+    fin.close();
+    fout.close();
+    return 0;
+}
