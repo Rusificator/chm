@@ -1,0 +1,292 @@
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <cmath>
+#include <string>
+#include <sstream>
+using namespace std;
+
+// ---------- факториал ----------
+double fact(int k) {
+    double f = 1.0;
+    for (int i = 2; i <= k; i++) f *= i;
+    return f;
+}
+
+// ---------- значение многочлена Ньютона в точке ----------
+double newtonForward(double** d, double h, double x0, int n, double xv) {
+    double q = (xv - x0) / h;
+    double P = d[0][0];
+    double prod = 1.0;
+    for (int k = 1; k < n; k++) {
+        prod *= (q - (k - 1));
+        P += prod / fact(k) * d[0][k];
+    }
+    return P;
+}
+
+// ---------- перевод координат данных в пиксели SVG ----------
+double toPx(double x, double xmin, double xmax, double left, double w) {
+    return left + (x - xmin) / (xmax - xmin) * w;
+}
+double toPy(double y, double ymin, double ymax, double top, double h) {
+    return top + (ymax - y) / (ymax - ymin) * h;
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+
+    ifstream fin("input.txt");
+    if (!fin) { cout << "Не удалось открыть input.txt\n"; return 1; }
+    ofstream fout("output.txt");
+    if (!fout) { cout << "Не удалось открыть output.txt\n"; return 1; }
+
+    // ---------- читаем таблицу ----------
+    int n;
+    fin >> n;
+    double* x = new double[n];
+    double* y = new double[n];
+    for (int i = 0; i < n; i++) fin >> x[i] >> y[i];
+
+    // ---------- проверка равномерности шага ----------
+    double h = x[1] - x[0];
+    for (int i = 1; i < n - 1; i++) {
+        if (fabs((x[i + 1] - x[i]) - h) > 1e-9) {
+            fout << "Шаг таблицы не постоянный — формула Ньютона вперёд неприменима.\n";
+            cout << "Шаг таблицы не постоянный!\n";
+            return 1;
+        }
+    }
+
+    // ---------- таблица конечных разностей ----------
+    double** d = new double*[n];
+    for (int i = 0; i < n; i++) d[i] = new double[n];
+    for (int i = 0; i < n; i++) d[i][0] = y[i];
+    for (int k = 1; k < n; k++)
+        for (int i = 0; i < n - k; i++)
+            d[i][k] = d[i + 1][k - 1] - d[i][k - 1];
+
+    // ---------- вывод таблицы разностей в файл ----------
+    fout << "Таблица конечных разностей:\n";
+    fout << setw(4) << "i" << setw(10) << "x" << setw(12) << "y";
+    for (int k = 1; k < n; k++) {
+        fout << setw(9) << "d^";
+        fout << k;
+        fout << "y";
+    }
+    fout << "\n";
+    for (int i = 0; i < n; i++) {
+        fout << setw(4) << i << setw(10) << x[i] << setw(12) << y[i];
+        for (int k = 1; k < n - i; k++)
+            fout << setw(10) << d[i][k];
+        fout << "\n";
+    }
+
+    // ---------- точки запроса ----------
+    int m;
+    fin >> m;
+    double* xq = new double[m];
+    for (int i = 0; i < m; i++) fin >> xq[i];
+
+    // ---------- вычисляем P(x) в точках запроса ----------
+    double* yq = new double[m];
+    fout << "\nЗначения интерполяционного многочлена Ньютона (вперёд):\n";
+    fout << fixed << setprecision(4);
+    for (int t = 0; t < m; t++) {
+        double q = (xq[t] - x[0]) / h;
+        yq[t] = newtonForward(d, h, x[0], n, xq[t]);
+        fout << "x = " << setw(8) << xq[t]
+             << "   q = " << setw(8) << q
+             << "   P(x) = " << setw(12) << yq[t] << "\n";
+    }
+
+    // ============================================================
+    //        ГЕНЕРАЦИЯ SVG-ГРАФИКА
+    // ============================================================
+
+    // плотная сетка для гладкой кривой P(x)
+    int N = 200;                              // точек на кривой
+    double xa = x[0], xb = x[n - 1];
+    double* xc = new double[N];
+    double* yc = new double[N];
+
+    // расширяем диапазон, если точки запроса выходят за пределы таблицы
+    for (int i = 0; i < m; i++) {
+        if (xq[i] < xa) xa = xq[i];
+        if (xq[i] > xb) xb = xq[i];
+    }
+
+    for (int i = 0; i < N; i++) {
+        xc[i] = xa + (xb - xa) * i / (N - 1);
+        yc[i] = newtonForward(d, h, x[0], n, xc[i]);
+    }
+
+    // границы области по X и Y
+    double xmin = xa, xmax = xb;
+    double ymin = yc[0], ymax = yc[0];
+    for (int i = 0; i < N; i++) {
+        if (yc[i] < ymin) ymin = yc[i];
+        if (yc[i] > ymax) ymax = yc[i];
+    }
+    for (int i = 0; i < n; i++) {
+        if (y[i] < ymin) ymin = y[i];
+        if (y[i] > ymax) ymax = y[i];
+    }
+    for (int i = 0; i < m; i++) {
+        if (yq[i] < ymin) ymin = yq[i];
+        if (yq[i] > ymax) ymax = yq[i];
+    }
+    // немного воздуха по краям
+    double dxPad = (xmax - xmin) * 0.05;
+    double dyPad = (ymax - ymin) * 0.10;
+    xmin -= dxPad;  xmax += dxPad;
+    ymin -= dyPad;  ymax += dyPad;
+
+    // размеры холста
+    double W = 900, H = 550;
+    double left = 80, top = 40, right = 40, bottom = 70;
+    double pw = W - left - right;
+    double ph = H - top - bottom;
+
+    // ---------- пишем SVG ----------
+    ofstream svg("graph.svg");
+    svg << "<svg xmlns='http://www.w3.org/2000/svg' width='" << W
+        << "' height='" << H << "'>\n";
+    svg << "<rect width='100%' height='100%' fill='white'/>\n";
+
+    // ----- сетка -----
+    svg << "<g stroke='#e0e0e0' stroke-width='1'>\n";
+    int nGrid = 9;
+    for (int i = 0; i <= nGrid; i++) {
+        double xv = xmin + (xmax - xmin) * i / nGrid;
+        double px = toPx(xv, xmin, xmax, left, pw);
+        svg << "<line x1='" << px << "' y1='" << top
+            << "' x2='" << px << "' y2='" << top + ph << "'/>\n";
+    }
+    for (int i = 0; i <= nGrid; i++) {
+        double yv = ymin + (ymax - ymin) * i / nGrid;
+        double py = toPy(yv, ymin, ymax, top, ph);
+        svg << "<line x1='" << left << "' y1='" << py
+            << "' x2='" << left + pw << "' y2='" << py << "'/>\n";
+    }
+    svg << "</g>\n";
+
+    // ----- оси -----
+    svg << "<g stroke='black' stroke-width='2'>\n";
+    svg << "<line x1='" << left << "' y1='" << top + ph
+        << "' x2='" << left + pw << "' y2='" << top + ph << "'/>\n";
+    svg << "<line x1='" << left << "' y1='" << top
+        << "' x2='" << left << "' y2='" << top + ph << "'/>\n";
+    svg << "</g>\n";
+
+    // ----- подписи делений по X -----
+    svg << "<g font-size='11' text-anchor='middle' fill='black'>\n";
+    for (int i = 0; i <= nGrid; i++) {
+        double xv = xmin + (xmax - xmin) * i / nGrid;
+        double px = toPx(xv, xmin, xmax, left, pw);
+        svg << "<text x='" << px << "' y='" << top + ph + 18 << "'>"
+            << fixed << setprecision(2) << xv << "</text>\n";
+    }
+    svg << "</g>\n";
+
+    // ----- подписи делений по Y -----
+    svg << "<g font-size='11' text-anchor='end' fill='black'>\n";
+    for (int i = 0; i <= nGrid; i++) {
+        double yv = ymin + (ymax - ymin) * i / nGrid;
+        double py = toPy(yv, ymin, ymax, top, ph);
+        svg << "<text x='" << left - 8 << "' y='" << py + 4 << "'>"
+            << fixed << setprecision(2) << yv << "</text>\n";
+    }
+    svg << "</g>\n";
+
+    // ----- кривая P(x) -----
+    svg << "<polyline fill='none' stroke='black' stroke-width='2' points='";
+    for (int i = 0; i < N; i++) {
+        svg << toPx(xc[i], xmin, xmax, left, pw) << ","
+            << toPy(yc[i], ymin, ymax, top, ph) << " ";
+    }
+    svg << "'/>\n";
+
+    // ----- исходные узлы (синие кружки) -----
+    svg << "<g fill='blue'>\n";
+    for (int i = 0; i < n; i++) {
+        svg << "<circle cx='" << toPx(x[i], xmin, xmax, left, pw)
+            << "' cy='" << toPy(y[i], ymin, ymax, top, ph)
+            << "' r='5'/>\n";
+    }
+    svg << "</g>\n";
+
+    // ----- найденные точки (красные ромбы) -----
+    svg << "<g fill='red'>\n";
+    for (int i = 0; i < m; i++) {
+        double px = toPx(xq[i], xmin, xmax, left, pw);
+        double py = toPy(yq[i], ymin, ymax, top, ph);
+        double r = 6;
+        svg << "<polygon points='"
+            << px << "," << py - r << " "
+            << px + r << "," << py << " "
+            << px << "," << py + r << " "
+            << px - r << "," << py << "'/>\n";
+    }
+    svg << "</g>\n";
+
+    // ----- подписи найденных точек -----
+    svg << "<g font-size='11' fill='red' text-anchor='left'>\n";
+    for (int i = 0; i < m; i++) {
+        double px = toPx(xq[i], xmin, xmax, left, pw);
+        double py = toPy(yq[i], ymin, ymax, top, ph);
+        svg << "<text x='" << px + 10 << "' y='" << py - 8 << "'>("
+            << fixed << setprecision(2) << xq[i] << ", "
+            << setprecision(3) << yq[i] << ")</text>\n";
+    }
+    svg << "</g>\n";
+
+    // ----- заголовок -----
+    svg << "<text x='" << W / 2 << "' y='22' text-anchor='middle' "
+        << "font-size='16' font-weight='bold'>"
+        << "Интерполяция по формуле Ньютона (вперёд)</text>\n";
+
+    // ----- подписи осей -----
+    svg << "<text x='" << left + pw / 2 << "' y='" << H - 20
+        << "' text-anchor='middle' font-size='14'>x</text>\n";
+    svg << "<text x='20' y='" << top + ph / 2
+        << "' text-anchor='middle' font-size='14' "
+        << "transform='rotate(-90 20 " << top + ph / 2 << ")'>y = P(x)</text>\n";
+
+    // ----- легенда -----
+    double lx = left + pw - 200, ly = top + 15;
+    svg << "<g font-size='12'>\n";
+    svg << "<line x1='" << lx << "' y1='" << ly
+        << "' x2='" << lx + 30 << "' y2='" << ly
+        << "' stroke='black' stroke-width='2'/>\n";
+    svg << "<text x='" << lx + 38 << "' y='" << ly + 4
+        << "'>P(x) — многочлен</text>\n";
+    svg << "<circle cx='" << lx + 15 << "' cy='" << ly + 25
+        << "' r='5' fill='blue'/>\n";
+    svg << "<text x='" << lx + 38 << "' y='" << ly + 29
+        << "'>Узлы таблицы</text>\n";
+    svg << "<polygon points='" << lx + 15 << "," << ly + 43 << " "
+        << lx + 21 << "," << ly + 50 << " "
+        << lx + 15 << "," << ly + 57 << " "
+        << lx + 9 << "," << ly + 50 << "' fill='red'/>\n";
+    svg << "<text x='" << lx + 38 << "' y='" << ly + 54
+        << "'>Найденные значения</text>\n";
+    svg << "</g>\n";
+
+    svg << "</svg>\n";
+    svg.close();
+
+    // ---------- освобождаем память ----------
+    delete[] x; delete[] y; delete[] xq; delete[] yq;
+    delete[] xc; delete[] yc;
+    for (int i = 0; i < n; i++) delete[] d[i];
+    delete[] d;
+
+    fin.close();
+    fout.close();
+
+    cout << "Готово.\n";
+    cout << "  output.txt — результаты вычислений\n";
+    cout << "  graph.svg  — график (откройте в браузере)\n";
+    return 0;
+}
