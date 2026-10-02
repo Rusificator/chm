@@ -1,1 +1,92 @@
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <cmath>
+#include <string>  
+using namespace std;
 
+// факториал
+double fact(int k) {
+    double f = 1.0;
+    for (int i = 2; i <= k; i++) f *= i;
+    return f;
+}
+
+int main() {
+    setlocale(LC_ALL, "Rus");
+
+    ifstream fin("input.txt");
+    if (!fin) { cout << "Не удалось открыть input.txt\n"; return 1; }
+    ofstream fout("output.txt");
+    if (!fout) { cout << "Не удалось открыть output.txt\n"; return 1; }
+
+    int n;                       // число узлов
+    fin >> n;
+
+    double* x = new double[n];
+    double* y = new double[n];
+    for (int i = 0; i < n; i++) fin >> x[i] >> y[i];
+
+    // --- проверка равномерности шага ---
+    double h = x[1] - x[0];
+    for (int i = 1; i < n - 1; i++) {
+        if (fabs((x[i + 1] - x[i]) - h) > 1e-9) {
+            fout << "Шаг таблицы не является постоянным — формула Ньютона вперёд неприменима.\n";
+            cout << "Шаг таблицы не постоянный!\n";
+            return 1;
+        }
+    }
+
+    // --- таблица конечных разностей: d[i][k] = Δ^k y_i ---
+    double** d = new double* [n];
+    for (int i = 0; i < n; i++) d[i] = new double[n];
+
+    for (int i = 0; i < n; i++) d[i][0] = y[i];
+    for (int k = 1; k < n; k++)
+        for (int i = 0; i < n - k; i++)
+            d[i][k] = d[i + 1][k - 1] - d[i][k - 1];
+
+    // вывод таблицы разностей
+    fout << "Таблица конечных разностей:\n";
+    fout << setw(4) << "i" << setw(10) << "x" << setw(12) << "y";
+    for (int k = 1; k < n; k++) fout << setw(10) << ("d^" + to_string(k) + "y");
+    fout << "\n";
+    for (int i = 0; i < n; i++) {
+        fout << setw(4) << i << setw(10) << x[i] << setw(12) << y[i];
+        for (int k = 1; k < n - i; k++)
+            fout << setw(10) << d[i][k];
+        fout << "\n";
+    }
+
+    // --- точки, в которых считаем интерполянт ---
+    int m;
+    fin >> m;
+    double* xq = new double[m];
+    for (int i = 0; i < m; i++) fin >> xq[i];
+
+    fout << "\nЗначения интерполяционного многочлена Ньютона (вперёд):\n";
+    for (int t = 0; t < m; t++) {
+        double xv = xq[t];
+        double q = (xv - x[0]) / h;
+
+        // сумма по формуле Ньютона
+        double P = d[0][0];        // y0
+        double prod = 1.0;
+        for (int k = 1; k < n; k++) {
+            prod *= (q - (k - 1));    // q*(q-1)*...*(q-k+1)
+            P += prod / fact(k) * d[0][k];
+        }
+
+        fout << "x = " << setw(8) << xv
+            << "   q = " << setw(8) << q
+            << "   P(x) = " << setw(12) << P << "\n";
+    }
+
+    delete[] x; delete[] y; delete[] xq;
+    for (int i = 0; i < n; i++) delete[] d[i];
+    delete[] d;
+
+    fin.close();
+    fout.close();
+    return 0;
+}
