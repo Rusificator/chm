@@ -2,10 +2,10 @@
 #include <fstream>
 #include <iomanip>
 #include <cmath>
-#include <string>  
+#include <string>
 using namespace std;
 
-// факториал
+//факториал
 double fact(int k) {
     double f = 1.0;
     for (int i = 2; i <= k; i++) f *= i;
@@ -20,24 +20,23 @@ int main() {
     ofstream fout("output.txt");
     if (!fout) { cout << "Не удалось открыть output.txt\n"; return 1; }
 
-    int n;                       // число узлов
+    int n;//число узлов
     fin >> n;
 
     double* x = new double[n];
     double* y = new double[n];
     for (int i = 0; i < n; i++) fin >> x[i] >> y[i];
 
-    // --- проверка равномерности шага ---
+    //проверка равномерности шага
     double h = x[1] - x[0];
     for (int i = 1; i < n - 1; i++) {
         if (fabs((x[i + 1] - x[i]) - h) > 1e-9) {
             fout << "Шаг таблицы не является постоянным — формула Ньютона вперёд неприменима.\n";
-            cout << "Шаг таблицы не постоянный!\n";
             return 1;
         }
     }
 
-    // --- таблица конечных разностей: d[i][k] = Δ^k y_i ---
+    // таблица конечных разностей
     double** d = new double* [n];
     for (int i = 0; i < n; i++) d[i] = new double[n];
 
@@ -46,7 +45,7 @@ int main() {
         for (int i = 0; i < n - k; i++)
             d[i][k] = d[i + 1][k - 1] - d[i][k - 1];
 
-    // вывод таблицы разностей
+    //вывд таблицы разностей
     fout << "Таблица конечных разностей:\n";
     fout << setw(4) << "i" << setw(10) << "x" << setw(12) << "y";
     for (int k = 1; k < n; k++) fout << setw(10) << ("d^" + to_string(k) + "y");
@@ -58,7 +57,63 @@ int main() {
         fout << "\n";
     }
 
-    // --- точки, в которых считаем интерполянт ---
+
+    double* c = new double[n];
+    for (int k = 0; k < n; k++) c[k] = 0.0;
+
+    double* temp = new double[n];
+    for (int k = 0; k < n; k++) temp[k] = 0.0;
+    temp[0] = 1.0;                // temp = 1 (текущее произведение)
+
+    double hk = 1.0;              // h^k
+
+    for (int k = 0; k < n; k++) {
+        if (k > 0) hk *= h;
+        double ak = d[0][k] / (fact(k) * hk);
+
+        // c[] += ak * temp[]
+        for (int j = 0; j < n; j++) c[j] += ak * temp[j];
+
+        // temp[] *= (x - x[k])
+        for (int j = n - 1; j >= 1; j--)
+            temp[j] = temp[j - 1] - x[k] * temp[j];
+        temp[0] = -x[k] * temp[0];
+    }
+    delete[] temp;
+
+   
+
+    //вывод многочлена в станд форме 
+    fout << "\nМногочлен Ньютона в стандартной форме:\nP(x) = ";
+    bool first = true;
+    for (int k = n - 1; k >= 0; k--) {
+        double ck = c[k];
+        if (fabs(ck) < 1e-12) continue;   //пропускаем нулевые коэф
+
+        if (first) {
+            if (ck < 0) fout << "-";
+            first = false;
+        }
+        else {
+            fout << (ck > 0 ? " + " : " - ");
+        }
+
+        double absCk = fabs(ck);
+        if (k == 0) {
+            fout << absCk;
+        }
+        else {
+            if (fabs(absCk - 1.0) > 1e-12) fout << absCk;   //не пишем 1 перед x
+            if (k == 1) fout << "x";
+            else        fout << "x^" << k;
+        }
+    }
+    if (first) fout << "0";       //все коэффициенты нулевые
+    fout << "\n";
+
+    delete[] c;
+
+    // точки в которых считаем интерполянт
     int m;
     fin >> m;
     double* xq = new double[m];
@@ -69,8 +124,8 @@ int main() {
         double xv = xq[t];
         double q = (xv - x[0]) / h;
 
-        // сумма по формуле Ньютона
-        double P = d[0][0];        // y0
+        //сумма по формуле Ньютона
+        double P = d[0][0];        //y0
         double prod = 1.0;
         for (int k = 1; k < n; k++) {
             prod *= (q - (k - 1));    // q*(q-1)*...*(q-k+1)
